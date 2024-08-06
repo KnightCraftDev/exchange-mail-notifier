@@ -1,0 +1,15 @@
+{
+    "username": "dein_benutzername",
+    "server": "dein_exchange_server",
+    "email": "deine_email@domain.com",
+    "timerWindowsClose": 5000,
+    "certfile": "cert.pem",
+    "hideSSLWarning": false,
+    "numbersLastHours": 18,
+    "showAlways": true,
+    "timeZone": "Europe/Berlin",
+    "additional_mailboxes": [
+        "zusatzpostfach1@example.com",
+        "zusatzpostfach2@example.com"
+    ]
+}
