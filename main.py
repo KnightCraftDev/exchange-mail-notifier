@@ -33,6 +33,9 @@ import tkinter as tk
 import pystray
 import pytz
 import argparse
+import platform
+import base64
+import hashlib
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, DELEGATE, Configuration, NTLM
 from cryptography.fernet import Fernet
@@ -49,6 +52,8 @@ timerWindowsClose = 10000
 numbersLastHours = 18
 showAlways = True  # Fenster immer anzeigen; auch wenn keine E-Mails vorhanden sind
 hideSSLWarning = False  # SSL-Warnung deaktivieren (nur für Entwicklungszwecke)
+# Zufälligen Schlüssel generieren (True) oder Benutzerspezifischen Schlüssel verwenden (False)
+randomSecretKey = True
 
 
 class CustomHTTPAdapter(NoVerifyHTTPAdapter):
@@ -85,9 +90,8 @@ def main():
     Returns:
         None
     """
-    global cert_file, ssl_context, timerWindowsClose
-    key = load_key()
-    cipher_suite = Fernet(key)
+    global cert_file, ssl_context, timerWindowsClose, randomSecretKey, numbersLastHours, showAlways, hideSSLWarning
+
     # Zugriff auf die zusätzlichen Postfächer
     additional_accounts = []
     timeZone = "Europe/Berlin"
@@ -99,6 +103,25 @@ def main():
     # Lade die Konfigurationsdaten
     with open('config.json', 'r') as config_file:
         config = json.load(config_file)
+
+     # Prüfen ob ein zufälliger Schlüssel generiert werden soll
+    if 'randomSecretKey' in config:
+        randomSecretKey_value = config['randomSecretKey']
+        if isinstance(randomSecretKey_value, str):
+            randomSecretKey_value = randomSecretKey_value.lower()
+        if randomSecretKey_value in [False, 0, "false", None]:
+            randomSecretKey = False
+        else:
+            randomSecretKey = True
+
+    # Verschlüsselungsschlüssel laden
+    key = load_key(randomSecretKey)
+    cipher_suite = Fernet(key)
+
+    # Prüfen ob der Benutzername vorhanden ist
+    if 'username' not in config:
+        print("Der Benutzername wurde nicht gefunden.")
+        sys.exit(1)
 
     # Prüfen nach welcher Zeit das Fenster geschlossen werden soll
     if 'timerWindowsClose' in config:
@@ -263,13 +286,24 @@ def main():
     sys.exit(0)
 
 
-def load_key():
+def load_key(random_key=True):
     """
-    Load the encryption key from a file or generate a new one if the file doesn't exist.
+    Load the encryption key from a file or generate a new one.
+
+    Args:
+        random_key (bool, optional): Whether to generate a new key if one doesn't exist.
+            Defaults to True.
 
     Returns:
         bytes: The encryption key.
+
+    Raises:
+        FileNotFoundError: If `random_key` is False and the key file doesn't exist.
+
     """
+    if not random_key:
+        return generate_user_specific_key()
+
     if os.path.exists("secret.key"):
         return open("secret.key", "rb").read()
     else:
@@ -277,6 +311,33 @@ def load_key():
         with open("secret.key", "wb") as key_file:
             key_file.write(key)
         return key
+
+
+def generate_user_specific_key():
+    """
+    Generates a user-specific key based on the current username and system information.
+
+    Returns:
+        bytes: The generated key as bytes.
+    """
+    # Abfrage des aktuellen Benutzernamens
+    username = os.getlogin()
+
+    # Abrufen einiger systembezogener Informationen
+    system_info = platform.node() + platform.system() + platform.release() + \
+        platform.machine() + platform.processor()
+
+    # Kombinieren Sie Benutzernamen und Systeminformationen
+    unique_string = username + system_info
+
+    # Erstellen eines SHA-256-Hashes der eindeutigen Zeichenfolge
+    hash_object = hashlib.sha256(unique_string.encode())
+    hash_digest = hash_object.digest()
+
+    # Verwenden der ersten 32 Bytes des Hashes, um einen Fernet-Schlüssel zu erstellen
+    key = base64.urlsafe_b64encode(hash_digest[:32])
+
+    return key
 
 
 def show_email_list(unread_emails, timerWindowsClose=5000):
@@ -366,7 +427,8 @@ if __name__ == "__main__":
             "additional_mailboxes": [
                 "zusatzpostfach1@example.com",
                 "zusatzpostfach2@example.com"
-            ]
+            ],
+            "randomSecretKey": true
         }
     """
     # ArgumentParser mit erweiterter Beschreibung

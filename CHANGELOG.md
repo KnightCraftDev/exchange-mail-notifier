@@ -4,6 +4,12 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten.
 
 ## [Unreleased]
 ### Hinzugefügt
+- Schlüssel für die Passwortverschlüsselung wird weiterhin zufällig generiert (default) oder es wird ein fester Schlüssel auf Basis des Benutzernamens und Betriebssystems verwendet.
+### Fixes
+- Fehlerbehebung bei der Übernahme der Default-Einstellungen für die Konfiguration.
+
+## [Unreleased]
+### Hinzugefügt
 - Erstellt die Grundstruktur der Anwendung `Exchange Mail Notifier`.
 - Implementierung der Hauptfunktion `main()` zum Abrufen ungelesener E-Mails.
 - Konfiguration von SSL und HTTP-Adapter zur Verbindung mit dem E-Mail-Server.

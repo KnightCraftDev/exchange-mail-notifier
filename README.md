@@ -55,7 +55,8 @@ Nach Ablauf des Zeitrahmens wird das Fenster automatisch geschlossen, um die Ben
             "zusatzpostfach1@example.com",
             "zusatzpostfach2@example.com"
         ], // Liste von zusätzlichen Postfächern, die abgerufen werden sollen
-       "timeZone": "Europe/Berlin"
+       "timeZone": "Europe/Berlin",
+       "randomSecretKey": true // true = Generiere einen zufälligen Schlüssel für die Passwortverschlüsselung (default); false = Verwende einen festen Schlüssel auf Basis des Benutzernamens und Betriebssystems
    }
    ```
 
@@ -75,11 +76,15 @@ Nach Ablauf des Zeitrahmens wird das Fenster automatisch geschlossen, um die Ben
 
 ## Tipp
 
-Erstelle eine Aufgabenplanung oder Cronjob, um die Anwendung automatisch alle 5 Minuten automatisch zu starten. Dies stellt sicher, dass du keine ungelesenen E-Mails verpasst.
+Erstelle eine Aufgabenplanung oder Cronjob, um die Anwendung automatisch alle 5 Minuten zu starten. Dies stellt sicher, dass keine ungelesenen E-Mails verpasst werden.
 
 ## Sicherheitshinweis
 
 Diese Anwendung verwendet SSL, um sicher mit dem E-Mail-Server zu verbinden. Sie hat jedoch Optionen, um die SSL-Verifizierung während der Entwicklung zu deaktivieren. Stelle sicher, dass die SSL-Verifizierung in der Produktion aktiviert ist, um die Sicherheit aufrechtzuerhalten.
+
+## Disclaimer
+
+Diese Anwendung wurde für den persönlichen Gebrauch entwickelt und sollte nicht für kritische oder sicherheitsrelevante Anwendungen verwendet werden. Es wird empfohlen, die Anwendung in einer sicheren Umgebung zu testen und zu verwenden. Der Autor übernimmt keine Haftung für Schäden oder Verluste, die durch die Verwendung dieser Anwendung entstehen.
 
 ## Lizenz
 

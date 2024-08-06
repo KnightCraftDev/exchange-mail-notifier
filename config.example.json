@@ -11,5 +11,6 @@
     "additional_mailboxes": [
         "zusatzpostfach1@example.com",
         "zusatzpostfach2@example.com"
-    ]
+    ],
+    "randomSecretKey": true
 }
