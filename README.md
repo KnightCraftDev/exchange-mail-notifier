@@ -1,7 +1,10 @@
 # Exchange Mail Notifier
 
+<p align="left">
+  <img src="./assets/icon-150.png" alt="Logo Exchange Mail Notifier" width="150" style="float:right; margin-left:10px;">
 **Exchange Mail Notifier** ist eine Python-Anwendung, die entwickelt wurde, um ungelesene E-Mails aus einem angegebenen Postfach abzurufen und deren Betreffzeilen in einem keinen Fenster anzuzeigen. Diese Anwendung ruft E-Mails basierend auf konfigurierbaren Parametern ab, einschließlich des Zeitrahmens für den Abruf von E-Mails und der Postfachdetails. Die Anwendung verwendet die `exchangelib`-Bibliothek, um eine Verbindung zu Exchange-Servern herzustellen und E-Mails abzurufen.
 Nach Ablauf des Zeitrahmens wird das Fenster automatisch geschlossen, um die Benachrichtigung zu beenden.
+</p>
 
 ## Funktionen
 
@@ -56,7 +59,43 @@ Nach Ablauf des Zeitrahmens wird das Fenster automatisch geschlossen, um die Ben
             "zusatzpostfach2@example.com"
         ], // Liste von zusätzlichen Postfächern, die abgerufen werden sollen
        "timeZone": "Europe/Berlin",
-       "randomSecretKey": true // true = Generiere einen zufälligen Schlüssel für die Passwortverschlüsselung (default); false = Verwende einen festen Schlüssel auf Basis des Benutzernamens und Betriebssystems
+       "randomSecretKey": true, // true = Generiere einen zufälligen Schlüssel für die Passwortverschlüsselung (default); false = Verwende einen festen Schlüssel auf Basis des Benutzernamens und Betriebssystems
+       "autodelete_password_file": true // true = Lösche die Passwortdatei wenn Login fehlschlägt (default); false = Behalte die Passwortdatei
+   }
+   ```
+4.1 **Zusätzliche Plugins aktivieren**:
+   Plugins können aktiviert werden, um zusätzliche Funktionen zu nutzen. Dazu muss die Eigenschaft `enabled` vorhanden sein. Alle Eigenschaften innerhalb des Attributs sind dann für das entsprechende Plugin. Fügen Sie die folgenden Zeilen in die Datei `config.json` ein:
+   ```json
+   {
+      ...,
+      'plugin_[Name des PlugIns]': [{
+         "name": "[Name des PlugIns]",
+         "enabled": true
+    }]
+   }
+   ```
+   Das komplette Beispiel könnte dann wie folgt aussehen:
+   ```json
+   {
+       "username": "dein_benutzername",
+       "email": "deine_email@example.com",
+       "server": "dein_email_server",
+       "certfile": "pfad/zum/zertifikat.crt",
+       "hideSSLWarning": false,
+       "timerWindowsClose": 10000,
+       "numbersLastHours": 18,
+       "showAlways": true,
+       "additional_mailboxes": [
+            "zusatzpostfach1@example.com",
+            "zusatzpostfach2@example.com"
+        ],
+       "timeZone": "Europe/Berlin",
+       "randomSecretKey": true,
+       "plugin_readexchangetask": [{
+         "name": "ReadExchangeTask",
+         "enabled": true,
+         "DaysAhead": 4
+      }]
    }
    ```
 
