@@ -36,6 +36,11 @@ import argparse
 import platform
 import base64
 import hashlib
+import importlib
+import os
+
+# Import the PluginInterface class from the plugin_interface.py file
+from plugin_interface import PluginInterface
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, DELEGATE, Configuration, NTLM
 from cryptography.fernet import Fernet
@@ -55,6 +60,14 @@ hideSSLWarning = False  # SSL-Warnung deaktivieren (nur für Entwicklungszwecke)
 # Zufälligen Schlüssel generieren (True) oder Benutzerspezifischen Schlüssel verwenden (False)
 randomSecretKey = True
 
+# Automatisches Löschen der Passwortdatei, wenn ein Fehler auftritt
+autodelete_password_file = True
+
+config = []
+# Zugriff auf die zusätzlichen Postfächer
+additional_accounts = []
+timeZone = "Europe/Berlin"
+
 
 class CustomHTTPAdapter(NoVerifyHTTPAdapter):
     # BaseProtocol so konfigurieren, dass es den benutzerdefinierten SSL-Kontext verwendet
@@ -70,9 +83,9 @@ class NoVerifySSLContext(ssl.SSLContext):
         self.verify_mode = ssl.CERT_NONE
 
 
-def main():
+def readExchangeMails():
     """
-    Main function that retrieves unread emails and displays their subject lines.
+    readExchangeMails function that retrieves unread emails and displays their subject lines.
 
     This function performs the following steps:
     1. Loads configuration data from the 'config.json' file.
@@ -90,124 +103,7 @@ def main():
     Returns:
         None
     """
-    global cert_file, ssl_context, timerWindowsClose, randomSecretKey, numbersLastHours, showAlways, hideSSLWarning
-
-    # Zugriff auf die zusätzlichen Postfächer
-    additional_accounts = []
-    timeZone = "Europe/Berlin"
-
-    # ----------------------
-    # Einstellungen aus Datei laden und prüfen
-    # ----------------------
-
-    # Lade die Konfigurationsdaten
-    with open('config.json', 'r') as config_file:
-        config = json.load(config_file)
-
-     # Prüfen ob ein zufälliger Schlüssel generiert werden soll
-    if 'randomSecretKey' in config:
-        randomSecretKey_value = config['randomSecretKey']
-        if isinstance(randomSecretKey_value, str):
-            randomSecretKey_value = randomSecretKey_value.lower()
-        if randomSecretKey_value in [False, 0, "false", None]:
-            randomSecretKey = False
-        else:
-            randomSecretKey = True
-
-    # Verschlüsselungsschlüssel laden
-    key = load_key(randomSecretKey)
-    cipher_suite = Fernet(key)
-
-    # Prüfen ob der Benutzername vorhanden ist
-    if 'username' not in config:
-        print("Der Benutzername wurde nicht gefunden.")
-        sys.exit(1)
-
-    # Prüfen nach welcher Zeit das Fenster geschlossen werden soll
-    if 'timerWindowsClose' in config:
-        timerWindowsClose = config['timerWindowsClose']
-
-    # Prüfen wie viele Stunden zurückgegangen werden soll, um E-Mails abzurufen
-    # Ganzzahlwert zwischen 1-24 wird erwartet
-    if 'numbersLastHours' in config:
-        numbersLastHours = config['numbersLastHours']
-        if numbersLastHours < 1 or numbersLastHours > 24:
-            print("Die Anzahl der Stunden muss zwischen 1 und 24 liegen.")
-            sys.exit(1)
-
-    # Prüfen ob das Zertifikat vorhanden ist
-    if os.path.exists(config['certfile']):
-        # Pfad zum selbstsignierten Zertifikat
-        cert_file = os.path.join(os.path.dirname(__file__), config['certfile'])
-        # SSL-Kontext mit dem selbstsignierten Zertifikat erstellen
-        ssl_context = ssl.create_default_context(cafile=cert_file)
-
-        BaseProtocol.HTTP_ADAPTER_CLS = CustomHTTPAdapter
-    else:
-        print(
-            "Das Zertifikat wurde nicht gefunden. Die SSL-Verifizierung wird deaktiviert.")
-        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter
-
-    try:
-        # Passwort sicher abfragen oder aus der Datei lesen
-        if os.path.exists("password.enc"):
-            with open("password.enc", "rb") as password_file:
-                encrypted_password = password_file.read()
-            config['password'] = cipher_suite.decrypt(
-                encrypted_password).decode()
-        else:
-            config['password'] = getpass.getpass(
-                'Bitte geben Sie Ihr Passwort ein: ')
-            encrypted_password = cipher_suite.encrypt(
-                config['password'].encode())
-            with open("password.enc", "wb") as password_file:
-                password_file.write(encrypted_password)
-    except Exception as e:
-        print(f"Ein Fehler ist aufgetreten: {e}")
-        print("Das Passwort konnte nicht gelesen/gespeichert werden.")
-        # Lösche die Datei, wenn ein Fehler auftritt
-        if os.path.exists("password.enc"):
-            os.remove("password.enc")
-        # Lösche Secret.key, wenn ein Fehler auftritt
-            if os.path.exists("secret.key"):
-                os.remove("secret.key")
-        sys.exit(1)  # Programm beenden
-
-    # Prüfen ob zusätzliche Postfächer vorhanden sind und diese hinzufügen
-    if 'additional_mailboxes' in config:
-        # Liste der zusätzlichen Postfächer
-        additional_accounts = config['additional_mailboxes']
-
-    # Prüfen ob die Zeitzone korrekt ist
-    if 'timeZone' in config:
-        if not check_timezone(config['timeZone']):
-            print(
-                f"Die angegebene Zeitzone ist ungültig. Verwende die Standardzeitzone: {timeZone}")
-        else:
-            print(f"Zeitzone: {config['timeZone']}")
-            timeZone = config['timeZone']
-
-    # Prüfen ob das Fenster immer angezeigt werden soll
-    if 'showAlways' in config:
-        showAlways_value = config['showAlways']
-        if isinstance(showAlways_value, str):
-            showAlways_value = showAlways_value.lower()
-        if showAlways_value in [False, 0, "false", None]:
-            showAlways = False
-        else:
-            showAlways = True
-
-    # Prüfen ob die SSL-Warnung ausgeblendet werden soll
-    if 'hideSSLWarning' in config:
-        hideSSLWarning_value = config['hideSSLWarning']
-        if isinstance(hideSSLWarning_value, str):
-            hideSSLWarning_value = hideSSLWarning_value.lower()
-        if hideSSLWarning_value in [True, 1, "true"]:
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-    # ----------------------
-    # Ende der Konfigurationsprüfung
-    # ----------------------
+    global config, cert_file, ssl_context, timerWindowsClose, randomSecretKey, numbersLastHours, showAlways, hideSSLWarning, additional_accounts, timeZone, autodelete_password_file
 
     # Authentifizierung
     credentials = Credentials(
@@ -228,12 +124,14 @@ def main():
         )
     except UnauthorizedError:
         print("Fehler: Ungültige Anmeldedaten. Das geheime Passwort wurde gelöscht (password.enc und secret.key).")
-        # Lösche die Datei, wenn ein Fehler auftritt
-        if os.path.exists("password.enc"):
-            os.remove("password.enc")
-        # Lösche Secret.key, wenn ein Fehler auftritt
-        if os.path.exists("secret.key"):
-            os.remove("secret.key")
+
+        if autodelete_password_file == True:
+            # Lösche die Datei, wenn ein Fehler auftritt
+            if os.path.exists("password.enc"):
+                os.remove("password.enc")
+            # Lösche Secret.key, wenn ein Fehler auftritt
+            if os.path.exists("secret.key"):
+                os.remove("secret.key")
         sys.exit(1)  # Programm beenden
     except Exception as e:
         print(f"Ein Fehler ist aufgetreten: {e}")
@@ -259,7 +157,7 @@ def main():
         # und füge sie zur Liste der ungelesenen E-Mails hinzu
         for additional_mailbox in additional_accounts:
             print(f"Postfach: {additional_mailbox}")
-            # print(f"Zugriff auf Postfach: {account.primary_smtp_address}")
+            print(f"Zugriff auf Postfach: {account.primary_smtp_address}")
             additional_account = Account(
                 primary_smtp_address=additional_mailbox,
                 config=exchange_config,
@@ -280,10 +178,7 @@ def main():
         print(f"Ein Fehler ist aufgetreten: {e}")
         sys.exit(1)  # Programm beenden
 
-    # tkinter-Dialog aufrufen
-    if unread_count > 0 or showAlways:
-        show_email_list(unread_emails, timerWindowsClose)
-    sys.exit(0)
+    return unread_emails, unread_count
 
 
 def load_key(random_key=True):
@@ -349,7 +244,7 @@ def show_email_list(unread_emails, timerWindowsClose=5000):
         timerWindowsClose (int, optional): The time in milliseconds after which the window should close. Defaults to 5000.
     """
     root = tk.Tk()
-    root.title("Neue E-Mails")
+    root.title("Benachrichtigung: Neue E-Mails und Termine")
     root.attributes('-topmost', True)  # Fenster immer im Vordergrund
 
     # Fenster oben rechts auf dem primären Display positionieren
@@ -361,6 +256,22 @@ def show_email_list(unread_emails, timerWindowsClose=5000):
     y = 0
     root.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
+    # Passe die Hintergrundfarbe dem Windows 10 Stil an
+    # Helle Hintergrundfarbe, ähnlich wie Windows 10
+    root.configure(bg='#F0F0F0')
+
+    # Prüfen ob Icons im Unterordner ./assets vorhanden sind
+    small_icon = None
+    large_icon = None
+    if os.path.exists("assets/icon-16.png"):
+        small_icon = tk.PhotoImage(file="assets/icon-16.png")
+
+    if os.path.exists("assets/icon-32.png"):
+        large_icon = tk.PhotoImage(file="assets/icon-32.png")
+
+    if large_icon is not None and small_icon is not None:
+        root.iconphoto(False, large_icon, small_icon)
+
     # Scrollbar hinzufügen
     scrollbar = tk.Scrollbar(root)
     scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -370,7 +281,7 @@ def show_email_list(unread_emails, timerWindowsClose=5000):
     text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     # Fett-Schriftstil definieren
-    text_widget.tag_configure('bold', font=('Helvetica', 10, 'bold'))
+    text_widget.tag_configure('bold', font=('Helvetica', 12, 'bold'))
 
     # Listbox hinzufügen
     listbox = tk.Listbox(root, yscrollcommand=scrollbar.set)
@@ -408,6 +319,201 @@ def check_timezone(nameTimeZone):
         return True
     except pytz.exceptions.UnknownTimeZoneError:
         return False
+
+
+def read_config():
+    """
+    Read the configuration from the 'config.json' file.
+
+    Returns:
+        dict: The configuration data as a dictionary.
+    """
+
+    global config, cert_file, ssl_context, timerWindowsClose, randomSecretKey, numbersLastHours, showAlways, hideSSLWarning, additional_accounts, timeZone, autodelete_password_file
+    # ----------------------
+    # Einstellungen aus Datei laden und prüfen
+    # ----------------------
+
+    # Lade die Konfigurationsdaten
+    with open('config.json', 'r') as config_file:
+        config = json.load(config_file)
+
+     # Prüfen ob ein zufälliger Schlüssel generiert werden soll
+    if 'randomSecretKey' in config:
+        randomSecretKey_value = config['randomSecretKey']
+        if isinstance(randomSecretKey_value, str):
+            randomSecretKey_value = randomSecretKey_value.lower()
+        if randomSecretKey_value in [False, 0, "false", None]:
+            randomSecretKey = False
+        else:
+            randomSecretKey = True
+
+    # Prüfen ob Passwortdatei automatisch gelöscht werden soll
+    if 'autodelete_password_file' in config:
+        autodelete_password_file_value = config['autodelete_password_file']
+        if isinstance(autodelete_password_file_value, str):
+            autodelete_password_file_value = autodelete_password_file_value.lower()
+        if autodelete_password_file_value in [False, 0, "false"]:
+            autodelete_password_file = False
+        else:
+            autodelete_password_file = True
+
+    # Verschlüsselungsschlüssel laden
+    key = load_key(randomSecretKey)
+    cipher_suite = Fernet(key)
+
+    # Prüfen ob der Benutzername vorhanden ist
+    if 'username' not in config:
+        print("Der Benutzername wurde nicht gefunden.")
+        sys.exit(1)
+
+    # Prüfen nach welcher Zeit das Fenster geschlossen werden soll
+    if 'timerWindowsClose' in config:
+        timerWindowsClose = config['timerWindowsClose']
+
+    # Prüfen wie viele Stunden zurückgegangen werden soll, um E-Mails abzurufen
+    # Ganzzahlwert zwischen 1-24 wird erwartet
+    if 'numbersLastHours' in config:
+        numbersLastHours = config['numbersLastHours']
+        if numbersLastHours < 1 or numbersLastHours > 24:
+            print("Die Anzahl der Stunden muss zwischen 1 und 24 liegen.")
+            sys.exit(1)
+
+    # Prüfen ob das Zertifikat vorhanden ist
+    if os.path.exists(config['certfile']):
+        # Pfad zum selbstsignierten Zertifikat
+        cert_file = os.path.join(os.path.dirname(__file__), config['certfile'])
+        # SSL-Kontext mit dem selbstsignierten Zertifikat erstellen
+        ssl_context = ssl.create_default_context(cafile=cert_file)
+
+        BaseProtocol.HTTP_ADAPTER_CLS = CustomHTTPAdapter
+    else:
+        print(
+            "Das Zertifikat wurde nicht gefunden. Die SSL-Verifizierung wird deaktiviert.")
+        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter
+
+    try:
+        # Passwort sicher abfragen oder aus der Datei lesen
+        if os.path.exists("password.enc"):
+            with open("password.enc", "rb") as password_file:
+                encrypted_password = password_file.read()
+            config['password'] = cipher_suite.decrypt(
+                encrypted_password).decode()
+        else:
+            config['password'] = getpass.getpass(
+                'Bitte geben Sie Ihr Passwort ein: ')
+            encrypted_password = cipher_suite.encrypt(
+                config['password'].encode())
+            with open("password.enc", "wb") as password_file:
+                password_file.write(encrypted_password)
+    except Exception as e:
+        print(f"Ein Fehler ist aufgetreten: {e}")
+        print("Das Passwort konnte nicht gelesen/gespeichert werden.")
+
+        if autodelete_password_file == True:
+            # Lösche die Datei, wenn ein Fehler auftritt
+            if os.path.exists("password.enc"):
+                os.remove("password.enc")
+            # Lösche Secret.key, wenn ein Fehler auftritt
+                if os.path.exists("secret.key"):
+                    os.remove("secret.key")
+        sys.exit(1)  # Programm beenden
+
+    # Prüfen ob zusätzliche Postfächer vorhanden sind und diese hinzufügen
+    if 'additional_mailboxes' in config:
+        # Liste der zusätzlichen Postfächer
+        additional_accounts = config['additional_mailboxes']
+        if not isinstance(additional_accounts, list):
+            print("Die zusätzlichen Postfächer müssen als Liste angegeben werden.")
+            additional_accounts = []
+
+    # Prüfen ob die Zeitzone korrekt ist
+    if 'timeZone' in config:
+        if not check_timezone(config['timeZone']):
+            print(
+                f"Die angegebene Zeitzone ist ungültig. Verwende die Standardzeitzone: {timeZone}")
+        else:
+            print(f"Zeitzone: {config['timeZone']}")
+            timeZone = config['timeZone']
+
+    # Prüfen ob das Fenster immer angezeigt werden soll
+    if 'showAlways' in config:
+        showAlways_value = config['showAlways']
+        if isinstance(showAlways_value, str):
+            showAlways_value = showAlways_value.lower()
+        if showAlways_value in [False, 0, "false", None]:
+            showAlways = False
+        else:
+            showAlways = True
+
+    # Prüfen ob die SSL-Warnung ausgeblendet werden soll
+    if 'hideSSLWarning' in config:
+        hideSSLWarning_value = config['hideSSLWarning']
+        if isinstance(hideSSLWarning_value, str):
+            hideSSLWarning_value = hideSSLWarning_value.lower()
+        if hideSSLWarning_value in [True, 1, "true"]:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    # ----------------------
+    # Ende der Konfigurationsprüfung
+    # ----------------------
+
+
+def load_plugins():
+    global config
+    plugins = []
+    for filename in os.listdir('plugins'):
+        if filename.endswith('.py'):
+            module_name = filename[:-3]  # Entferne die Dateiendung
+
+            # Prüfen ob Modul aus config geladen werden soll
+            if 'plugin_' + module_name in config:
+                allow_plugin = config['plugin_' + module_name]
+
+                if isinstance(allow_plugin, dict):
+                    allow_plugin_enabled = allow_plugin.get('enabled', False)
+                if allow_plugin_enabled not in [True, 1, "true"]:
+                    continue
+            else:
+                # Plugin nicht in der Konfiguration gefunden
+                continue
+
+            print(f"Lade Plugin: {module_name}")
+            module = importlib.import_module(f'plugins.{module_name}')
+            for attr in dir(module):
+                plugin_class = getattr(module, attr)
+                if isinstance(plugin_class, type) and issubclass(plugin_class, PluginInterface):
+                    plugins.append(plugin_class(config))
+
+    return plugins
+
+
+def main():
+    global timerWindowsClose, numbersLastHours, showAlways
+    global config, cert_file, ssl_context, timerWindowsClose, randomSecretKey, hideSSLWarning, additional_accounts, timeZone
+
+    read_config()
+
+    # E-Mails abrufen
+    unread_emails, unread_count = readExchangeMails()
+    print(f"Anzahl der neuen E-Mails: {unread_count}")
+
+    # Plugins laden
+    plugins = load_plugins()
+    for plugin in plugins:
+        # Nur ausführen, wenn das Plugin die PluginInterface-Klasse implementiert und nicht die Basisklasse ist
+        if plugin.__class__ != PluginInterface and issubclass(plugin.__class__, PluginInterface):
+            # print(f"Ausführung des Plugins: {plugin.__class__.__name__}")
+
+            # E-Mails hinzufügen
+            unread_emails, unread_count = plugin.add_emails(
+                unread_emails, unread_count)
+
+    # E-Mails anzeigen
+    if showAlways or unread_count > 0:
+        show_email_list(unread_emails, timerWindowsClose)
+    else:
+        print("Keine neuen E-Mails vorhanden.")
 
 
 if __name__ == "__main__":
