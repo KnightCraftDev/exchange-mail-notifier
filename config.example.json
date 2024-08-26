@@ -12,5 +12,6 @@
         "zusatzpostfach1@example.com",
         "zusatzpostfach2@example.com"
     ],
-    "randomSecretKey": true
+    "randomSecretKey": true,
+    "autodelete_password_file": true
 }

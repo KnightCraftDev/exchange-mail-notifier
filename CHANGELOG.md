@@ -2,6 +2,15 @@
 
 Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten.
 
+## 2024-08-26 [Unreleased]
+### Added
+- Added plugin support
+- Added plugin to read Exchange tasks from the calendar.
+- Added support for reading Exchange tasks from the calendar.
+- Added configuration option to enable/disable reading Exchange tasks.
+- Added configuration option to specify the number of days ahead to read Exchange tasks.
+
+
 ## [Unreleased]
 ### Hinzugefügt
 - Schlüssel für die Passwortverschlüsselung wird weiterhin zufällig generiert (default) oder es wird ein fester Schlüssel auf Basis des Benutzernamens und Betriebssystems verwendet.
