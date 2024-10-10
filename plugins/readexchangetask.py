@@ -194,32 +194,35 @@ class PluginReadExchangeTask(PluginInterface):
         for event in events:
             # print(f"Kalender: {event.folder.name}")
 
-            # Start- und Endzeit in lokaler Zeitzone anzeigen
-            start_local = event.start.astimezone(pytz.timezone(self.timeZone))
-            stop_local = event.end.astimezone(pytz.timezone(self.timeZone))
+            # Sicherstellen, dass Start- und Endzeit EWSDateTime-Objekte sind
+            if isinstance(event.start, EWSDateTime) and isinstance(event.end, EWSDateTime):
+                # Start- und Endzeit in lokaler Zeitzone anzeigen
+                start_local = event.start.astimezone(
+                    pytz.timezone(self.timeZone))
+                stop_local = event.end.astimezone(pytz.timezone(self.timeZone))
 
-            # Datum und Uhrzeit formatieren
-            start_local = start_local.strftime("%d.%m.%Y %H:%M")
-            stop_local = stop_local.strftime("%d.%m.%Y %H:%M")
+                # Datum und Uhrzeit formatieren
+                start_local = start_local.strftime("%d.%m.%Y %H:%M")
+                stop_local = stop_local.strftime("%d.%m.%Y %H:%M")
 
-            # Definiere data als class
-            data = EmailData()
+                # Definiere data als class
+                data = EmailData()
 
-            data.sender.name = f"EVENT {start_local}"
-            data.sender.email = "EVENT"
-            data.subject = event.subject
-            data.body = f"Ist wiederkehrend: {event.is_recurring}"
+                data.sender.name = f"EVENT {start_local}"
+                data.sender.email = "EVENT"
+                data.subject = event.subject
+                data.body = f"Ist wiederkehrend: {event.is_recurring}"
 
-            unread_emails.append(data)
-            unread_count += 1
+                unread_emails.append(data)
+                unread_count += 1
 
-            print(f"Betreff: {event.subject}")
-            print(f"Start: {start_local}")
-            print(f"Ende: {stop_local}")
-            print(f"Ist wiederkehrend: {event.is_recurring}")
-            if event.is_recurring:
-                print(f"Wiederholungsmuster: {event.recurrence}")
-            print("------------------------")
+                print(f"Betreff: {event.subject}")
+                print(f"Start: {start_local}")
+                print(f"Ende: {stop_local}")
+                print(f"Ist wiederkehrend: {event.is_recurring}")
+                if event.is_recurring:
+                    print(f"Wiederholungsmuster: {event.recurrence}")
+                print("------------------------")
 
         return unread_emails, unread_count
 
