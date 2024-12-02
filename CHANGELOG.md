@@ -2,6 +2,15 @@
 
 Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten.
 
+## 2024-12-02 [Unreleased]
+### Added
+- Farbeinstellungen für die Benutzeroberfläche.
+  - Hintergrundfarbe `windowBackground`
+  - Textfarbe `windowForeground`
+### Änderungen
+- Gruppierung von E-Mail-Benachrichtigungen nach Absender.
+- Fenstergröße nach Inhalt anpassen.
+
 ## 2024-08-26 [Unreleased]
 ### Added
 - Added plugin support

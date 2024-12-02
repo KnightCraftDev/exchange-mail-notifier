@@ -13,5 +13,7 @@
         "zusatzpostfach2@example.com"
     ],
     "randomSecretKey": true,
-    "autodelete_password_file": true
+    "autodelete_password_file": true,
+    "windowBackground": "#f0f0f0",
+    "windowForeground": "#000000"
 }

@@ -38,6 +38,8 @@ import base64
 import hashlib
 import importlib
 import os
+import tkinter.font as tkFont
+import re
 
 # Import the PluginInterface class from the plugin_interface.py file
 from plugin_interface import PluginInterface
@@ -47,6 +49,7 @@ from cryptography.fernet import Fernet
 from tkinter import messagebox
 from datetime import datetime, timedelta
 from exchangelib.errors import UnauthorizedError
+from collections import defaultdict
 
 cert_file = None
 ssl_context = None
@@ -67,6 +70,38 @@ config = []
 # Zugriff auf die zusätzlichen Postfächer
 additional_accounts = []
 timeZone = "Europe/Berlin"
+
+
+def is_valid_color_code(color):
+    """
+    Überprüft, ob der gegebene Farbcode gültig ist.
+    Diese Funktion überprüft, ob der übergebene Farbcode entweder ein gültiger
+    hexadezimaler Farbcode (3 oder 6 Stellen) oder ein bekannter Farbname ist.
+    Args:
+        color (str): Der zu überprüfende Farbcode oder Farbname.
+    Returns:
+        bool: True, wenn der Farbcode gültig ist, andernfalls False.
+    """
+    # Regex für hexadezimale Farbwerte (3 oder 6 Stellen)
+    hex_color_pattern = r'^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$'
+
+    # Liste bekannter Farbnamen
+    known_colors = {
+        "black", "white", "red", "green", "blue", "yellow", "cyan", "magenta",
+        "gray", "grey", "purple", "pink", "orange", "brown", "navy", "teal",
+        # Weitere Farben können hinzugefügt werden
+    }
+
+    # Überprüfen, ob der Input ein hexadezimaler Farbcode ist
+    if re.match(hex_color_pattern, color):
+        return True
+
+    # Überprüfen, ob der Input ein bekannter Farbname ist
+    if color in known_colors:
+        return True
+
+    # Wenn keine der Bedingungen erfüllt ist
+    return False
 
 
 class CustomHTTPAdapter(NoVerifyHTTPAdapter):
@@ -173,7 +208,13 @@ def readExchangeMails():
 
         # Ausgabe der Betreffzeilen der neuen E-Mails
         for item in unread_emails:
-            print(f"{item.sender.name} {item.subject}")
+            # Prüfen ob der Absender vorhanden ist
+            if item.to_recipients is None:
+                recipients = "Kein Absender"
+            else:
+                recipients = ", ".join(
+                    [recipient.email_address for recipient in item.to_recipients]) if item.to_recipients else "Keine Empfänger"
+            print(f"[{recipients}] {item.sender.name} {item.subject}")
     except Exception as e:
         print(f"Ein Fehler ist aufgetreten: {e}")
         sys.exit(1)  # Programm beenden
@@ -235,6 +276,39 @@ def generate_user_specific_key():
     return key
 
 
+def adjust_text_height(text_widget):
+    """
+    Passt die Höhe eines Text-Widgets basierend auf der Anzahl der Zeilen und deren Höhe an.
+    Args:
+        text_widget (tk.Text): Das Text-Widget, dessen Höhe angepasst werden soll.
+    Returns:
+        int: Die berechnete Gesamthöhe des Text-Widgets in Pixeln.
+    """
+    # Erhalte die aktuelle Anzahl der Zeilen im Text
+    line_count = int(text_widget.index('end-1c').split('.')[0])
+
+    # Bestimme die Schriftart und -größe
+    font = tkFont.Font(font=text_widget.cget("font"))
+    line_height = font.metrics('linespace')  # Höheneinheit für die Schrift
+
+    total_height = 0
+
+    # Bestimme die Linienhöhe jeder einzelnen Zeile
+    for i in range(1, line_count + 1):
+        line_info = text_widget.dlineinfo(f"{i}.0")
+        if line_info:
+            line_height = line_info[3]  # Höhe der Zeile in Pixeln
+            total_height += line_height
+            # print(f"Zeilenhöhe von Zeile {i}: {line_height}")
+
+    # Faktor für die Gesamthöhe
+    total_height = int(total_height * line_count / 1.5)
+    # print(f"Anzahl der Zeilen: {line_count}; Gesamthöhe: {total_height}")
+    # Passen Sie die Höhe des Text-Widgets an
+    text_widget.config(height=total_height)
+    return total_height
+
+
 def show_email_list(unread_emails, timerWindowsClose=5000):
     """
     Displays a list of unread emails in a tkinter window.
@@ -243,6 +317,7 @@ def show_email_list(unread_emails, timerWindowsClose=5000):
         unread_emails (list): A list of email objects representing unread emails.
         timerWindowsClose (int, optional): The time in milliseconds after which the window should close. Defaults to 5000.
     """
+    global config
     root = tk.Tk()
     root.title("Benachrichtigung: Neue E-Mails und Termine")
     root.attributes('-topmost', True)  # Fenster immer im Vordergrund
@@ -251,14 +326,15 @@ def show_email_list(unread_emails, timerWindowsClose=5000):
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
     window_width = 500
-    window_height = 200
+    window_height = 50
     x = screen_width - window_width
     y = 0
     root.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
     # Passe die Hintergrundfarbe dem Windows 10 Stil an
     # Helle Hintergrundfarbe, ähnlich wie Windows 10
-    root.configure(bg='#F0F0F0')
+    # root.configure(bg='#F0F0F0')
+    root.configure(bg=config['windowBackground'])
 
     # Prüfen ob Icons im Unterordner ./assets vorhanden sind
     small_icon = None
@@ -273,30 +349,65 @@ def show_email_list(unread_emails, timerWindowsClose=5000):
         root.iconphoto(False, large_icon, small_icon)
 
     # Scrollbar hinzufügen
-    scrollbar = tk.Scrollbar(root)
-    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    # scrollbar = tk.Scrollbar(root)
+    # scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     # Text-Widget hinzufügen
-    text_widget = tk.Text(root, wrap=tk.WORD, yscrollcommand=scrollbar.set)
+    # text_widget = tk.Text(root, wrap=tk.WORD, yscrollcommand=scrollbar.set)
+    # text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Fett-Schriftstil definieren
+    # text_widget.tag_configure('bold', font=('Helvetica', 12, 'bold'))
+    # Text-Widget hinzufügen
+    text_widget = tk.Text(
+        root, wrap=tk.WORD, bg=config['windowBackground'], fg=config['windowForeground'])
     text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     # Fett-Schriftstil definieren
-    text_widget.tag_configure('bold', font=('Helvetica', 12, 'bold'))
-
-    # Listbox hinzufügen
-    listbox = tk.Listbox(root, yscrollcommand=scrollbar.set)
+    text_widget.tag_configure('bold', font=(
+        'Helvetica', 12, 'bold'), foreground=config['windowForeground'])
+    text_widget.tag_configure('normal', foreground=config['windowForeground'])
 
     # Prüfen ob E-Mails vorhanden sind
     if len(unread_emails) == 0:
         text_widget.insert(tk.END, "Keine neuen E-Mails vorhanden.", 'bold')
     else:
+        # Dictionary zum Gruppieren der E-Mails nach Empfänger
+        emails_by_recipient = defaultdict(list)
+        # E-Mails nach Empfänger gruppieren
         for email in unread_emails:
-            text_widget.insert(tk.END, f"{email.sender.name} ", 'bold')
-            text_widget.insert(tk.END, f"{email.subject}\n", 'normal')
+            # Prüfen, ob email.to_recipients existiert
+            if hasattr(email, 'to_recipients') and email.to_recipients:
+                for recipient in email.to_recipients:
+                    emails_by_recipient[recipient.email_address].append(email)
+            else:
+                emails_by_recipient["Keine Empfänger"].append(email)
 
-    listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # Ausgabe der gruppierten E-Mails
+        for recipient, emails in emails_by_recipient.items():
+            text_widget.insert(tk.END, f"Empfänger: {recipient}\n", 'bold')
+            for email in emails:
+                text_widget.insert(tk.END, f"  {email.sender.name} ", 'bold')
+                text_widget.insert(tk.END, f"{email.subject}\n", 'normal')
 
-    scrollbar.config(command=listbox.yview)
+    # listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # scrollbar.config(command=listbox.yview)
+
+    # Fenster nach X Sekunden schließen
+    # root.after(timerWindowsClose, root.destroy)
+
+    # root.mainloop()
+
+    # Dynamische Anpassung der Fensterhöhe basierend auf der Höhe des Text-Widgets
+    root.update_idletasks()
+    _height = adjust_text_height(text_widget)
+    # text_widget_height = text_widget.winfo_reqheight()
+    text_widget_height = _height  # text_widget.winfo_height()
+    # print(f"Text-Widget-Höhe: {text_widget_height}")
+    window_height = max(window_height, text_widget_height)
+    # print(window_height)
+    root.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
     # Fenster nach X Sekunden schließen
     root.after(timerWindowsClose, root.destroy)
@@ -454,6 +565,19 @@ def read_config():
         if hideSSLWarning_value in [True, 1, "true"]:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+    # Prüfen, ob windowBackground eine valiede Farbe ist
+    if 'windowBackground' in config:
+        windowBackground = config['windowBackground']
+        if not is_valid_color_code(windowBackground) or len(windowBackground) < 3:
+            print("Die windowBackground-Farbe muss im Format '#RRGGBB' angegeben werden.")
+            config['windowBackground'] = '#F0F0F0'
+
+    # Prüfen, ob windowForeground eine valiede Farbe ist
+    if 'windowForeground' in config:
+        windowForeground = config['windowForeground']
+        if not is_valid_color_code(windowForeground) or len(windowForeground) < 3:
+            print("Die windowForeground-Farbe muss im Format '#RRGGBB' angegeben werden.")
+            config['windowForeground'] = '#666'
     # ----------------------
     # Ende der Konfigurationsprüfung
     # ----------------------
