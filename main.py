@@ -318,9 +318,28 @@ def show_email_list(unread_emails, timerWindowsClose=5000):
         timerWindowsClose (int, optional): The time in milliseconds after which the window should close. Defaults to 5000.
     """
     global config
-    root = tk.Tk()
+
+    try:
+        import ctypes
+        # Eindeutige App ID im Format: [Firma].[Produkt].[Unterprodukt].[Version]
+        myappid = 'com.knightcraftdev.pymailnotificator.1.0'  # Eindeutige ID
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except ImportError:
+        pass  # Nicht Windows oder ctypes nicht verfügbar
+
+    # Icon für die Taskleiste vorbereiten
+    icon_path = os.path.abspath(
+        "assets/icon.ico") if os.path.exists("assets/icon.ico") else None
+
+    # Root-Fenster mit Icon erstellen
+    if icon_path:
+        root = tk.Tk(className="PyMailNotificator")  # Klassennamen setzen
+        root.wm_iconbitmap(icon_path)
+    else:
+        root = tk.Tk()
+
     root.title("Benachrichtigung: Neue E-Mails und Termine")
-    root.attributes('-topmost', True)  # Fenster immer im Vordergrund
+    root.attributes('-topmost', True)
 
     # Fenster oben rechts auf dem primären Display positionieren
     screen_width = root.winfo_screenwidth()
@@ -332,13 +351,13 @@ def show_email_list(unread_emails, timerWindowsClose=5000):
     root.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
     # Passe die Hintergrundfarbe dem Windows 10 Stil an
-    # Helle Hintergrundfarbe, ähnlich wie Windows 10
-    # root.configure(bg='#F0F0F0')
     root.configure(bg=config['windowBackground'])
 
     # Prüfen ob Icons im Unterordner ./assets vorhanden sind
     small_icon = None
     large_icon = None
+
+    # Icons für das Fenster selbst
     if os.path.exists("assets/icon-16.png"):
         small_icon = tk.PhotoImage(file="assets/icon-16.png")
 
@@ -348,16 +367,6 @@ def show_email_list(unread_emails, timerWindowsClose=5000):
     if large_icon is not None and small_icon is not None:
         root.iconphoto(False, large_icon, small_icon)
 
-    # Scrollbar hinzufügen
-    # scrollbar = tk.Scrollbar(root)
-    # scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-    # Text-Widget hinzufügen
-    # text_widget = tk.Text(root, wrap=tk.WORD, yscrollcommand=scrollbar.set)
-    # text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-    # Fett-Schriftstil definieren
-    # text_widget.tag_configure('bold', font=('Helvetica', 12, 'bold'))
     # Text-Widget hinzufügen
     text_widget = tk.Text(
         root, wrap=tk.WORD, bg=config['windowBackground'], fg=config['windowForeground'])
@@ -372,41 +381,38 @@ def show_email_list(unread_emails, timerWindowsClose=5000):
     if len(unread_emails) == 0:
         text_widget.insert(tk.END, "Keine neuen E-Mails vorhanden.", 'bold')
     else:
-        # Dictionary zum Gruppieren der E-Mails nach Empfänger
-        emails_by_recipient = defaultdict(list)
-        # E-Mails nach Empfänger gruppieren
+        # Dictionary zum Gruppieren der E-Mails nach Absender
+        emails_by_sender = defaultdict(list)
+
+        # E-Mails nach Absender gruppieren
         for email in unread_emails:
-            # Prüfen, ob email.to_recipients existiert
-            if hasattr(email, 'to_recipients') and email.to_recipients:
-                for recipient in email.to_recipients:
-                    emails_by_recipient[recipient.email_address].append(email)
+            # Prüfen, ob email.sender existiert und einen Namen hat
+            if hasattr(email, 'sender') and email.sender:
+                sender_name = email.sender.name if hasattr(
+                    email.sender, 'name') else "Unbekannt"
+                sender_email = email.sender.email_address if hasattr(
+                    email.sender, 'email_address') else "Keine E-Mail"
+                # Schlüssel als Tupel aus Name und E-Mail-Adresse
+                sender_key = (sender_name, sender_email)
+                emails_by_sender[sender_key].append(email)
             else:
-                emails_by_recipient["Keine Empfänger"].append(email)
+                emails_by_sender[("Unbekannter Absender",
+                                  "Keine E-Mail")].append(email)
 
         # Ausgabe der gruppierten E-Mails
-        for recipient, emails in emails_by_recipient.items():
-            text_widget.insert(tk.END, f"Empfänger: {recipient}\n", 'bold')
+        for sender_info, emails in emails_by_sender.items():
+            sender_name, sender_email = sender_info
+            text_widget.insert(
+                tk.END, f"Absender: {sender_name} <{sender_email}>\n", 'bold')
             for email in emails:
-                text_widget.insert(tk.END, f"  {email.sender.name} ", 'bold')
-                text_widget.insert(tk.END, f"{email.subject}\n", 'normal')
-
-    # listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-    # scrollbar.config(command=listbox.yview)
-
-    # Fenster nach X Sekunden schließen
-    # root.after(timerWindowsClose, root.destroy)
-
-    # root.mainloop()
+                # Zeige den Betreff an
+                text_widget.insert(tk.END, f"  {email.subject}\n", 'normal')
 
     # Dynamische Anpassung der Fensterhöhe basierend auf der Höhe des Text-Widgets
     root.update_idletasks()
     _height = adjust_text_height(text_widget)
-    # text_widget_height = text_widget.winfo_reqheight()
-    text_widget_height = _height  # text_widget.winfo_height()
-    # print(f"Text-Widget-Höhe: {text_widget_height}")
+    text_widget_height = _height
     window_height = max(window_height, text_widget_height)
-    # print(window_height)
     root.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
     # Fenster nach X Sekunden schließen
